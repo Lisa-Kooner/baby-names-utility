@@ -1,0 +1,188 @@
+#!/bin/bash
+#
+# A simple framework for testing the bn scripts
+#
+# Returns the number of failed test cases.
+#
+# Format of a test:
+#     test 'command' expected_return_value 'stdin text' 'expected stdout' 'expected stderr'
+#
+# Some example test cases are given. You should add more test cases.
+#
+# Sam Scott, McMaster University, 2024
+
+
+# GLOBALS: tc = test case number, fails = number of failed cases
+declare -i tc=0
+declare -i fails=0
+
+############################################
+# Run a single test. Runs a given command 3 times
+# to check the return value, stdout, and stderr
+#
+# GLOBALS: tc, fails
+# PARAMS: $1 = command
+#         $2 = expected return value
+#         $3 = standard input text to send
+#         $4 = expected stdout
+#         $5 = expected stderr
+# RETURNS: 0 = success, 1 = bad return, 
+#          2 = bad stdout, 3 = bad stderr
+############################################
+test() {
+    tc=tc+1
+
+    local COMMAND=$1
+    local RETURN=$2
+	local STDIN=$3
+    local STDOUT=$4
+    local STDERR=$5
+
+    # CHECK RETURN VALUE
+    $COMMAND <<< "$STDIN" >/dev/null 2>/dev/null
+    local A_RETURN=$?
+
+    if [[ "$A_RETURN" != "$RETURN" ]]; then
+        echo "Test $tc Failed"
+        echo "   $COMMAND"
+        echo "   Expected Return: $RETURN"
+        echo "   Actual Return: $A_RETURN"
+        fails=$fails+1
+        return 1
+    fi
+
+    # CHECK STDOUT
+    local A_STDOUT=$($COMMAND <<< "$STDIN" 2>/dev/null)
+
+    if [[ "$STDOUT" != "$A_STDOUT" ]]; then
+        echo "Test $tc Failed"
+        echo "   $COMMAND"
+        echo "   Expected STDOUT: $STDOUT"
+        echo "   Actual STDOUT: $A_STDOUT"
+        fails=$fails+1
+        return 2
+    fi
+    
+    # CHECK STDERR
+    local A_STDERR=$($COMMAND <<< "$STDIN" 2>&1 >/dev/null)
+
+    if [[ "$STDERR" != "$A_STDERR" ]]; then
+        echo "Test $tc Failed"
+        echo "   $COMMAND"
+        echo "   Expected STDERR: $STDERR"
+        echo "   Actual STDERR: $A_STDERR"
+        fails=$fails+1
+        return 3
+    fi
+    
+    # SUCCESS
+    echo "Test $tc Passed"
+    return 0
+}
+
+##########################################
+# EXAMPLE TEST CASES
+##########################################
+
+# Test 1: simple success
+test './bn 1 m' 0 '1890' 'Top male name in 1890: John' ''
+
+# Test 2: multi line success
+test './bn 1 b' 0 '1890' 'Top male name in 1890: John
+Top female name in 1890: Mary' ''
+
+# Test 3: error case
+test './bn' 3 '18800' '' 'Badly formatted year: 18800'  
+
+# Test 4: multi line error case #2
+test './bn 100 X' 2 '' '' 'Bad second parameter: X
+Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]'
+
+# Test 5: Help flag
+test './bn --help' 0 '' 'bn - Baby Names Utility
+
+Display the most popular baby names for given years.
+
+USAGE: bn [<num>] [<assigned gender: f|F|m|M|b|B>]
+
+ARGUMENTS:
+    <num>           Number of names to display (1-100, default: 5)
+    <assigned gender>
+                    f, F : Female names
+                    m, M : Male names
+                    b, B : Both female and male names (default)
+
+INPUT:
+    The utility reads years from standard input (one per line).
+
+EXAMPLES:
+    bn                      # Top 5 names for both genders
+    bn 10 f                 # Top 10 female names
+    echo "2020" | bn 1 m    # Top male name in 2020' ''
+
+# Test 6: Default behavior (top 5, both genders)
+test './bn' 0 '2020' 'Top 5 male names in 2020
+1: Liam
+2: Noah
+3: Oliver
+4: Elijah
+5: William
+Top 5 female names in 2020
+1: Olivia
+2: Emma
+3: Ava
+4: Charlotte
+5: Sophia' ''
+
+# Test 7: gender filter only
+test './bn M' 0 '1880' 'Top 5 male names in 1880
+1: John
+2: William
+3: James
+4: Charles
+5: George' ''
+
+# Test 8: multiple years with one bad year (like the bn 1 f example)
+test './bn 1 f' 3 '1966
+194' 'Top female name in 1966: Lisa' 'Badly formatted year: 194'
+
+# Test 9: number only  
+test './bn 2' 0 '2000' 'Top 2 male names in 2000
+1: Jacob
+2: Michael
+Top 2 female names in 2000
+1: Emily
+2: Hannah' ''
+
+# Test 10: Error - too many parameters
+test './bn 5 m extra' 1 '' '' 'Too many parameters
+Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]'
+
+# Test 11: Error - bad first parameter (number too low)
+test './bn 0 f' 2 '' '' 'Bad first parameter: 0
+Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]'
+
+# Test 12: Error - bad first parameter (number too high)
+test './bn 101 f' 2 '' '' 'Bad first parameter: 101
+Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]'
+
+# Test 13: Error - bad first parameter (not a number)
+test './bn abc f' 2 '' '' 'Bad first parameter: abc
+Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]'
+
+# Test 14: Error - no data for year
+test './bn' 4 '1111' '' 'No data for 1111'
+
+# Test 15: Error - badly formatted year (non-numeric)
+test './bn' 3 'abcd' '' 'Badly formatted year: abcd'
+
+
+echo
+echo "--- Test Summary ---"
+echo "Total tests: $tc"
+echo "Failed: $fails"
+
+
+# return code
+exit $fails
+

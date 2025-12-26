@@ -1,0 +1,276 @@
+#!/bin/bash
+
+
+#
+# Name : Lisa-Kooner Singh
+# Student ID : 400581921
+# Date : October 20th 2025
+
+# This program implements a baby names utility for searching popular US baby names from historical data.
+# This program can:
+#      - Display top baby names for any year between 1880-2022
+#      - Filter results by gender (male, female, or both)
+#      - Customize the number of names displayed (1-100)
+#      - Handle multiple years in a single execution
+#      - Provide comprehensive error handling and input validation
+#
+# Command-line options: [<num>] [<assigned gender: f|F|m|M|b|B>] or --help
+#
+
+
+# Global Variables and Default Values
+data_dir="us_baby_names" # Directory containing all year data files
+num=5                    # Default number of names to display
+gender="b"               # Default gender filter "both"
+
+# 
+# usage
+# 
+# Displays the usage information for the bn utility to standard error.
+# This function is called when command-line arguments are invalid.
+#
+# Parameters: None
+# Return Value: None (outputs to stderr)
+#
+usage() {
+    echo "Usage: bn [<num: 1 to 100>] [<assigned gender: f|F|m|M|b|B>]" >&2
+}
+
+# 
+# help
+# 
+# Displays comprehensive help information for the bn utility to standard output.
+# This function is called when the --help flag is provided.
+#
+# Parameters: None
+# Return Value: None (outputs to stdout)
+#
+help() {
+    cat << EOF
+bn - Baby Names Utility
+
+Display the most popular baby names for given years.
+
+USAGE: bn [<num>] [<assigned gender: f|F|m|M|b|B>]
+
+ARGUMENTS:
+    <num>           Number of names to display (1-100, default: 5)
+    <assigned gender>
+                    f, F : Female names
+                    m, M : Male names
+                    b, B : Both female and male names (default)
+
+INPUT:
+    The utility reads years from standard input (one per line).
+
+EXAMPLES:
+    bn                      # Top 5 names for both genders
+    bn 10 f                 # Top 10 female names
+    echo "2020" | bn 1 m    # Top male name in 2020
+EOF
+}
+
+# 
+# display
+# 
+# Displays the top names for a specific gender and year after sorting by popularity.
+# This helper function for the top() function handles the output formatting for both 
+# single and multiple names.
+#
+# Parameters:
+#      $1 - The data file to read from
+#      $2 - The number of names to display
+#      $3 - The gender code (M/F) to filter by
+#      $4 - The gender label (male/female) for output
+#      $5 - The year being processed
+#
+# Return Value: None (outputs to stdout)
+#
+display(){
+    local file=$1
+    local num=$2
+    local gender_letter=$3
+    local gender_label=$4
+    local year=$5
+
+    #Get top names sorted by count in file
+    local sorted_names=$(grep ",${gender_letter}," "$file" 2>/dev/null | sort -t',' -k3 -nr 2>/dev/null | head -n "$num")
+
+    #If the result above is empty, then return nothing
+    if [[ -z "$sorted_names" ]]
+    then
+        return
+    fi
+    
+    ### Format output ###
+    #If only one name being displayed
+    if [[ $num -eq 1 ]]
+    then
+        local line=$(echo "$sorted_names" | head -n 1)
+        local top_name="${line%%,*}" #Remove everything after the first comma
+        echo "Top $gender_label name in $year: $top_name"
+    
+    #If more then one name being displayed
+    else
+        echo "Top $num $gender_label names in $year"
+        for ((i=1; i<=num; i++))
+        do
+            local line=$(echo "$sorted_names" | head -n $i | tail -n 1)
+            if [[ -n "$line" ]]
+            then
+                local name="${line%%,*}"
+                echo "$i: $name"
+            fi
+        done
+    fi
+}
+
+# 
+# top
+# 
+# Processes a single year of data, validating the year format and file existence,
+# then calls the display function for the requested gender(s).
+#
+# Parameters:
+#      $1 - The year to process
+#      $2 - The number of names to display
+#      $3 - The gender filter (m/M/f/F/b/B)
+#
+# Return Value:
+#      3 - If year format is invalid
+#      4 - If no data exists for the year
+#      None - On successful processing
+#
+top(){
+    local year=$1
+    local num=$2
+    local gender=$3
+    local file="$data_dir/yob${year}.txt"
+
+    #Validate the year format
+    if [[ ! $year =~ ^[0-9]{4}$ ]]
+    then
+        echo "Badly formatted year: $year" >&2
+        exit 3
+    fi
+
+    #Check if data file exists
+    if [[ ! -f $file ]]
+    then
+        echo "No data for $year" >&2
+        exit 4
+    fi
+
+    #Process based on gender using if statements
+    if [[ "$gender" == "m" ||  "$gender" == "M" ]]
+    then
+        display "$file" "$num" "M" "male" "$year"
+    elif [[ "$gender" = "f" ||  "$gender" = "F" ]]
+    then
+        display "$file" "$num" "F" "female" "$year"
+    elif [[ "$gender" = "b" ||  "$gender" = "B" ]]
+    then
+        display "$file" "$num" "M" "male" "$year"
+        display "$file" "$num" "F" "female" "$year" 
+    fi  
+}
+
+# 
+# main
+# 
+# This is the entry point of the program, which parses command-line arguments,
+# validates input, and processes years from standard input.
+#
+# Parameters:
+#      $@ - All command-line arguments
+#
+# Return Value:
+#      0 - Successful execution
+#      1 - Too many parameters
+#      2 - Bad command-line parameters
+#      Other - Errors from top function (3, 4)
+#
+main(){
+    ### Handle --help flag ###
+    if [[ $# -gt 0 && "$1" == "--help" ]]
+    then
+        help
+        exit 0
+    fi
+
+    ### Handle General Errors ###
+    #Case 1: more than 2 arguments
+    if [[ $# -gt 2 ]]
+    then
+        echo "Too many parameters" >&2
+        usage
+        exit 1
+    fi
+
+    #Case 2: 0 or 1 argument only
+    if [[ $# -ge 1 ]]
+    then
+        if [[ $1 =~ ^[0-9]+$ ]] #if the only parameter is a number
+        then
+            if [[ $1 -ge 1 && $1 -le 100 ]]
+            then
+                num=$1
+            else
+                echo "Bad first parameter: $1" >&2
+                usage
+                exit 2
+            fi
+        elif [[ $1 =~ ^[fFmMbB]$ ]] #if the only parameter is a letter
+        then
+            gender=$1
+        else
+            echo "Bad first parameter: $1" >&2
+            usage
+            exit 2
+        fi
+    fi
+
+    #Case 3: Exactly 2 arguments
+    if [[ $# -eq 2 ]]
+    then
+        if [[ $1 =~ ^[fFmMbB]$ ]] #if first argument is gender already
+        then
+            echo "Extra parameter: $2" >&2
+            usage
+            exit 1
+        elif [[ $1 =~ ^[0-9]+$ ]] #if first argument is a number
+        then
+            if [[ $1 -lt 1 || $1 -gt 100 ]]
+            then
+                echo "Bad first parameter: $1" >&2
+                usage
+                exit 2
+            elif [[ ! $2 =~ ^[fFmMbB]$ ]] #if second argument is a letter
+            then
+                echo "Bad second parameter: $2" >&2
+                usage
+                exit 2
+            else
+                num=$1
+                gender=$2
+            fi
+        else
+            echo "Bad first parameter: $1" >&2
+            usage
+            exit 2
+        fi
+    fi
+
+    #Read the year dynamic inputs given by user
+    while read -r year
+    do
+        if [[ -n "$year" ]]
+        then
+            top "$year" "$num" "$gender"
+            echo # Adding a blank line between the year for readability
+        fi
+    done
+}
+
+# Run the program by calling the main function with all arguments
+main "$@"
