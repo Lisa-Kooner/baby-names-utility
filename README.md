@@ -1,9 +1,7 @@
-# Assignment 2
+# Baby Names Utility
 
-- **Title:** *Baby Names Utility*
-- **Course:** *2XC3*
+- **Type:** *Bash Project*
 - **Date:** *October 23rd 2025*
-- **Name:** *Lisa-Koooner Singh*
 
 ---
 This project, written in Bash, allows users to search for the **most popular baby names** in the United States from the late 1880s to 2022, using data from the Social Security Administration. 
